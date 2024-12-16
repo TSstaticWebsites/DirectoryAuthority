@@ -23,11 +23,8 @@ async def get_consensus_nodes():
         # Initialize Tor controller with explicit port
         controller = Controller.from_port(port=9051)
 
-        # Authenticate using cookie file
-        await asyncio.to_thread(
-            controller.authenticate,
-            cookie_path='/run/tor/control.authcookie'
-        )
+        # Authenticate using default cookie authentication
+        await asyncio.to_thread(controller.authenticate)
 
         # Get consensus data
         consensus = await asyncio.to_thread(
