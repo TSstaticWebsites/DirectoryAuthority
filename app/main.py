@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from stem.descriptor.remote import DescriptorDownloader
+from stem import Signal
 from stem.control import Controller
 from .models import Node, NodeList, NodeRole
 import asyncio
@@ -20,35 +20,37 @@ app.add_middleware(
 async def get_consensus_nodes():
     """Fetch nodes from Tor network consensus."""
     try:
-        downloader = DescriptorDownloader()
+        # Initialize Tor controller
+        controller = Controller.from_port()
+        await asyncio.to_thread(controller.authenticate)
+
+        # Get consensus data
         consensus = await asyncio.to_thread(
-            downloader.get_consensus
+            controller.get_network_statuses
         )
+
         nodes = []
-        for router in consensus.routers:
+        for router in consensus:
             # Only include nodes with Guard or Exit flags
             if 'Guard' in router.flags or 'Exit' in router.flags:
                 role = NodeRole.ENTRY if 'Guard' in router.flags else \
                        NodeRole.EXIT if 'Exit' in router.flags else \
                        NodeRole.MIDDLE
 
-                # Get node's public key
-                controller = Controller.from_port()
-                await asyncio.to_thread(controller.authenticate)
-                key_material = await asyncio.to_thread(
+                # Get node's descriptor for public key
+                desc = await asyncio.to_thread(
                     controller.get_server_descriptor, router.fingerprint
                 )
 
                 node = Node(
                     id=router.fingerprint,
-                    public_key=base64.b64encode(key_material.onion_key).decode(),
+                    public_key=base64.b64encode(desc.onion_key).decode(),
                     role=role,
                     address=f"{router.address}:{router.or_port}"
                 )
                 nodes.append(node)
 
-                await asyncio.to_thread(controller.close)
-
+        await asyncio.to_thread(controller.close)
         return nodes
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
