@@ -702,6 +702,16 @@ anyio = ">=3.4.0,<5"
 full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.7)", "pyyaml"]
 
 [[package]]
+name = "stem"
+version = "1.8.2"
+description = "Stem is a Python controller library that allows applications to interact with Tor (https://www.torproject.org/)."
+optional = false
+python-versions = "*"
+files = [
+    {file = "stem-1.8.2.tar.gz", hash = "sha256:83fb19ffd4c9f82207c006051480389f80af221a7e4783000aedec4e384eb582"},
+]
+
+[[package]]
 name = "typer"
 version = "0.15.1"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
@@ -969,4 +979,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "b9459e6f4929e555402e55984a3d2b605d9adbfec9a29d8da767d5a74f632400"
+content-hash = "575d98f0430c3167b3e11364516553dd2d6818a267946e62e04a0efb35cf66d8"

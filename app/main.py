@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
+from stem.descriptor.remote import DescriptorDownloader
+from stem.control import Controller
 from .models import Node, NodeList, NodeRole
+import asyncio
+import base64
 
 app = FastAPI()
 
@@ -14,46 +17,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mock data for testing
-MOCK_NODES = [
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_entry_1",
-        role=NodeRole.ENTRY,
-        address="entry1.onion:9001"
-    ),
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_middle_1",
-        role=NodeRole.MIDDLE,
-        address="middle1.onion:9001"
-    ),
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_exit_1",
-        role=NodeRole.EXIT,
-        address="exit1.onion:9001"
-    ),
-    # Additional nodes for better circuit building
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_entry_2",
-        role=NodeRole.ENTRY,
-        address="entry2.onion:9001"
-    ),
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_middle_2",
-        role=NodeRole.MIDDLE,
-        address="middle2.onion:9001"
-    ),
-    Node(
-        id=str(uuid.uuid4()),
-        public_key="mock_key_exit_2",
-        role=NodeRole.EXIT,
-        address="exit2.onion:9001"
-    ),
-]
+async def get_consensus_nodes():
+    """Fetch nodes from Tor network consensus."""
+    try:
+        downloader = DescriptorDownloader()
+        consensus = await asyncio.to_thread(
+            downloader.get_consensus
+        )
+        nodes = []
+        for router in consensus.routers:
+            # Only include nodes with Guard or Exit flags
+            if 'Guard' in router.flags or 'Exit' in router.flags:
+                role = NodeRole.ENTRY if 'Guard' in router.flags else \
+                       NodeRole.EXIT if 'Exit' in router.flags else \
+                       NodeRole.MIDDLE
+
+                # Get node's public key
+                controller = Controller.from_port()
+                await asyncio.to_thread(controller.authenticate)
+                key_material = await asyncio.to_thread(
+                    controller.get_server_descriptor, router.fingerprint
+                )
+
+                node = Node(
+                    id=router.fingerprint,
+                    public_key=base64.b64encode(key_material.onion_key).decode(),
+                    role=role,
+                    address=f"{router.address}:{router.or_port}"
+                )
+                nodes.append(node)
+
+                await asyncio.to_thread(controller.close)
+
+        return nodes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
 async def root():
@@ -61,8 +59,9 @@ async def root():
 
 @app.get("/nodes", response_model=NodeList)
 async def get_nodes():
-    """Return list of available Tor nodes."""
-    return NodeList(nodes=MOCK_NODES)
+    """Return list of available Tor nodes from network consensus."""
+    nodes = await get_consensus_nodes()
+    return NodeList(nodes=nodes)
 
 @app.get("/healthz")
 async def healthz():
