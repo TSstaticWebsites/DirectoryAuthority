@@ -38,7 +38,7 @@ async def get_consensus_nodes():
         print("Fetching consensus data...")
         # Set timeout for consensus fetch
         consensus_task = asyncio.create_task(
-            asyncio.to_thread(controller.get_network_statuses)
+            asyncio.to_thread(lambda: list(controller.get_network_statuses()))
         )
         try:
             consensus = await asyncio.wait_for(consensus_task, timeout=30.0)
