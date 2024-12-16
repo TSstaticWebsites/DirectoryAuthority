@@ -20,9 +20,14 @@ app.add_middleware(
 async def get_consensus_nodes():
     """Fetch nodes from Tor network consensus."""
     try:
-        # Initialize Tor controller
-        controller = Controller.from_port()
-        await asyncio.to_thread(controller.authenticate)
+        # Initialize Tor controller with explicit port
+        controller = Controller.from_port(port=9051)
+
+        # Authenticate using cookie file
+        await asyncio.to_thread(
+            controller.authenticate,
+            cookie_path='/run/tor/control.authcookie'
+        )
 
         # Get consensus data
         consensus = await asyncio.to_thread(
