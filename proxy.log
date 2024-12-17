@@ -1,0 +1,11 @@
+INFO:     Started server process [84342]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2024-12-17 08:50:15,198 - app.main - INFO - Attempting to read consensus file: /var/lib/tor/cached-microdesc-consensus
+2024-12-17 08:50:15,198 - app.main - WARNING - Consensus file does not exist: /var/lib/tor/cached-microdesc-consensus
+2024-12-17 08:50:15,198 - app.main - INFO - Attempting to read consensus file: /var/lib/tor/cached-consensus
+2024-12-17 08:50:15,198 - app.main - WARNING - Consensus file does not exist: /var/lib/tor/cached-consensus
+2024-12-17 08:50:15,198 - app.main - ERROR - No readable consensus file found
+2024-12-17 08:50:15,198 - app.main - ERROR - Error in get_consensus_nodes: No readable consensus file found
+INFO:     127.0.0.1:57628 - "GET /nodes HTTP/1.1" 500 Internal Server Error
