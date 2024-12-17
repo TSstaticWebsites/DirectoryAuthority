@@ -32,14 +32,26 @@ async def get_consensus_nodes() -> List[Dict]:
         # Since UseMicrodescriptors=0, we use the regular consensus file
         consensus_path = "/var/lib/tor/cached-consensus"
 
-        logger.info(f"Attempting to read consensus file: {consensus_path}")
+        # Debug information about file and permissions
+        logger.debug(f"Current working directory: {os.getcwd()}")
+        logger.debug(f"Process UID: {os.getuid()}")
+        logger.debug(f"Process GID: {os.getgid()}")
+        logger.debug(f"Process groups: {os.getgroups()}")
+
+        # Check if file exists
         if not os.path.exists(consensus_path):
-            logger.error(f"Consensus file does not exist: {consensus_path}")
-            raise Exception("Consensus file not found")
+            logger.error(f"Consensus file does not exist at path: {consensus_path}")
+            raise Exception(f"Consensus file not found at {consensus_path}")
+
+        # Get file stats
+        file_stat = os.stat(consensus_path)
+        logger.debug(f"File permissions: {oct(file_stat.st_mode)}")
+        logger.debug(f"File owner: {file_stat.st_uid}")
+        logger.debug(f"File group: {file_stat.st_gid}")
 
         if not os.access(consensus_path, os.R_OK):
             logger.error(f"No read permission for consensus file: {consensus_path}")
-            raise Exception("Cannot read consensus file")
+            raise Exception(f"Cannot read consensus file at {consensus_path}")
 
         nodes = []
         current_node = {}
