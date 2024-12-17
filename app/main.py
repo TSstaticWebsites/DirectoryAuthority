@@ -1,14 +1,19 @@
+import asyncio
+import logging
+from typing import List, Dict
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from stem import Signal
 from stem.control import Controller
-from .models import Node, NodeList, NodeRole
-import asyncio
 import base64
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Enable CORS for browser access
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,93 +22,104 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def get_consensus_nodes():
-    """Fetch nodes from Tor network consensus."""
+async def get_consensus_nodes() -> List[Dict]:
+    """
+    Fetch and process Tor consensus nodes using microdescriptors.
+    """
     try:
-        # Initialize Tor controller with explicit port and timeout
+        logger.info("Initializing Tor controller on port 9051")
         controller = Controller.from_port(port=9051)
 
-        print("Connecting to Tor controller...")
-        # Set timeout for authentication
-        auth_task = asyncio.create_task(asyncio.to_thread(controller.authenticate))
+        logger.info("Authenticating with Tor controller using cookie file")
+        cookie_path = "/var/run/tor/control.authcookie"
+        with open(cookie_path, 'rb') as f:
+            cookie = f.read()
+        auth_task = asyncio.create_task(asyncio.to_thread(lambda: controller.authenticate(cookie)))
         try:
             await asyncio.wait_for(auth_task, timeout=10.0)
-            print("Successfully authenticated with Tor controller")
+            logger.info("Successfully authenticated with Tor controller")
         except asyncio.TimeoutError:
-            raise HTTPException(
-                status_code=500,
-                detail="Timeout while authenticating with Tor controller"
-            )
+            raise HTTPException(status_code=500, detail="Tor controller authentication timeout")
 
-        print("Fetching consensus data...")
-        # Set timeout for consensus fetch
+        logger.info("Fetching consensus data")
         consensus_task = asyncio.create_task(
             asyncio.to_thread(lambda: list(controller.get_network_statuses()))
         )
         try:
             consensus = await asyncio.wait_for(consensus_task, timeout=30.0)
-            print(f"Retrieved {len(consensus)} nodes from consensus")
+            logger.info(f"Successfully fetched {len(consensus)} nodes from consensus")
         except asyncio.TimeoutError:
-            raise HTTPException(
-                status_code=500,
-                detail="Timeout while fetching consensus data"
-            )
+            raise HTTPException(status_code=500, detail="Consensus fetch timeout")
 
         nodes = []
         for router in consensus:
-            # Only include nodes with Guard or Exit flags
-            if 'Guard' in router.flags or 'Exit' in router.flags:
-                role = NodeRole.ENTRY if 'Guard' in router.flags else \
-                       NodeRole.EXIT if 'Exit' in router.flags else \
-                       NodeRole.MIDDLE
-
-                print(f"Fetching descriptor for node {router.fingerprint}...")
-                # Set timeout for descriptor fetch
-                desc_task = asyncio.create_task(
-                    asyncio.to_thread(
-                        controller.get_server_descriptor, router.fingerprint
+            try:
+                # Only include nodes that can be used as Guard or Exit nodes
+                if 'Guard' in router.flags or 'Exit' in router.flags:
+                    # Fetch microdescriptor instead of router descriptor
+                    micro_desc_task = asyncio.create_task(
+                        asyncio.to_thread(
+                            lambda: controller.get_microdescriptor(router.fingerprint)
+                        )
                     )
-                )
-                try:
-                    desc = await asyncio.wait_for(desc_task, timeout=10.0)
-                    if not desc or not desc.onion_key:
-                        print(f"Warning: Missing onion key for node {router.fingerprint}")
+                    try:
+                        micro_desc = await asyncio.wait_for(micro_desc_task, timeout=5.0)
+                        if micro_desc and micro_desc.onion_key:
+                            # Convert onion key to base64 for transmission
+                            onion_key_base64 = base64.b64encode(
+                                micro_desc.onion_key.encode()
+                            ).decode()
+
+                            node_info = {
+                                "nickname": router.nickname,
+                                "fingerprint": router.fingerprint,
+                                "address": router.address,
+                                "or_port": router.or_port,
+                                "dir_port": router.dir_port,
+                                "flags": list(router.flags),
+                                "onion_key": onion_key_base64,
+                                "bandwidth": router.bandwidth
+                            }
+                            nodes.append(node_info)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"Timeout fetching microdescriptor for {router.fingerprint}"
+                        )
+                        continue
+                    except Exception as e:
+                        logger.warning(
+                            f"Error fetching microdescriptor for {router.fingerprint}: {str(e)}"
+                        )
                         continue
 
-                    node = Node(
-                        id=router.fingerprint,
-                        public_key=base64.b64encode(
-                            desc.onion_key.encode('utf-8') if isinstance(desc.onion_key, str)
-                            else desc.onion_key
-                        ).decode('utf-8'),
-                        role=role,
-                        address=f"{router.address}:{router.or_port}"
-                    )
-                    nodes.append(node)
-                except asyncio.TimeoutError:
-                    print(f"Timeout fetching descriptor for node {router.fingerprint}")
-                    continue
-                except Exception as e:
-                    print(f"Error fetching descriptor for node {router.fingerprint}: {str(e)}")
-                    continue
+            except Exception as e:
+                logger.warning(f"Error processing node {router.fingerprint}: {str(e)}")
+                continue
 
-        await asyncio.to_thread(controller.close)
-        print(f"Successfully fetched {len(nodes)} valid nodes")
+        logger.info(f"Successfully processed {len(nodes)} valid nodes")
         return nodes
+
     except Exception as e:
-        print(f"Error in get_consensus_nodes: {str(e)}")
+        logger.error(f"Error in get_consensus_nodes: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'controller' in locals():
+            controller.close()
 
 @app.get("/")
-async def root():
+def root():
     return {"message": "Directory Authority Proxy"}
 
-@app.get("/nodes", response_model=NodeList)
-async def get_nodes():
-    """Return list of available Tor nodes from network consensus."""
-    nodes = await get_consensus_nodes()
-    return NodeList(nodes=nodes)
+@app.get("/nodes")
+async def get_nodes() -> List[Dict]:
+    """
+    Get a list of available Tor nodes.
+    """
+    return await get_consensus_nodes()
 
 @app.get("/healthz")
-async def healthz():
-    return {"status": "ok"}
+def healthz():
+    """
+    Health check endpoint.
+    """
+    return {"status": "healthy"}
