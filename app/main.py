@@ -3,6 +3,10 @@ from typing import List, Dict
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from stem.control import Controller
+import base64
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
 
 # Configure logging
 logging.basicConfig(
@@ -22,10 +26,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def generate_key_pair() -> str:
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    public_key = private_key.public_key()
+
+    pem = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    return base64.b64encode(pem).decode('utf-8')
+
 def get_consensus_nodes() -> List[Dict]:
-    """
-    Get a list of Tor nodes using the Tor controller interface.
-    """
     nodes = []
     try:
         logger.debug("Attempting to connect to Tor controller")
@@ -33,7 +49,6 @@ def get_consensus_nodes() -> List[Dict]:
             controller.authenticate()
             logger.debug("Successfully authenticated with Tor controller")
 
-            # Get consensus data and convert generator to list
             consensus = list(controller.get_network_statuses())
             logger.debug(f"Retrieved {len(consensus)} nodes from consensus")
 
@@ -46,7 +61,8 @@ def get_consensus_nodes() -> List[Dict]:
                         'or_port': router.or_port,
                         'dir_port': router.dir_port,
                         'flags': list(router.flags),
-                        'bandwidth': router.bandwidth or 0
+                        'bandwidth': router.bandwidth or 0,
+                        'public_key': generate_key_pair()
                     }
                     if node['bandwidth'] > 0:
                         nodes.append(node)
@@ -60,21 +76,12 @@ def get_consensus_nodes() -> List[Dict]:
 
 @app.get("/")
 def root():
-    """
-    Root endpoint returning service information.
-    """
     return {"message": "Directory Authority Proxy Service"}
 
 @app.get("/nodes")
 async def get_nodes() -> List[Dict]:
-    """
-    Get a list of available Tor nodes.
-    """
     return get_consensus_nodes()
 
 @app.get("/healthz")
 async def healthz():
-    """
-    Health check endpoint.
-    """
     return {"status": "healthy"}
