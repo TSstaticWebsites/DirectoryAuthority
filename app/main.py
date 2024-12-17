@@ -35,7 +35,7 @@ def generate_key_pair() -> str:
     public_key = private_key.public_key()
 
     pem = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
+        encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
 
