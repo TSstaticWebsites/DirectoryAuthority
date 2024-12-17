@@ -59,7 +59,14 @@ def get_consensus_nodes() -> List[Dict]:
                     if node_count >= 100:
                         break
 
-                    if router.flags and ('Guard' in router.flags or 'Exit' in router.flags):
+                    # Include nodes that can serve as middle relays (those without Guard or Exit flags)
+                    is_guard = 'Guard' in router.flags if router.flags else False
+                    is_exit = 'Exit' in router.flags if router.flags else False
+                    is_stable = 'Stable' in router.flags if router.flags else False
+                    is_fast = 'Fast' in router.flags if router.flags else False
+
+                    # Accept nodes that are either Guard/Exit or could be middle nodes (Stable and Fast)
+                    if (is_guard or is_exit or (is_stable and is_fast)):
                         try:
                             node = {
                                 'nickname': router.nickname,
@@ -67,7 +74,7 @@ def get_consensus_nodes() -> List[Dict]:
                                 'address': router.address,
                                 'or_port': router.or_port,
                                 'dir_port': router.dir_port,
-                                'flags': list(router.flags),
+                                'flags': list(router.flags) if router.flags else [],
                                 'bandwidth': router.bandwidth or 0,
                                 'public_key': generate_key_pair()
                             }
@@ -78,7 +85,11 @@ def get_consensus_nodes() -> List[Dict]:
                             logger.error(f"Error processing node {router.nickname}: {str(node_error)}")
                             continue
 
-                logger.debug(f"Filtered to {len(nodes)} Guard/Exit nodes with bandwidth > 0")
+                logger.debug(f"Filtered to {len(nodes)} total nodes with bandwidth > 0")
+                logger.debug(f"Node types: Guard({sum(1 for n in nodes if 'Guard' in n['flags'])}), " +
+                           f"Middle({sum(1 for n in nodes if 'Guard' not in n['flags'] and 'Exit' not in n['flags'])}), " +
+                           f"Exit({sum(1 for n in nodes if 'Exit' in n['flags'])})")
+
                 if not nodes:
                     logger.error("No valid nodes found after filtering")
                     raise HTTPException(status_code=500, detail="No valid nodes available")
