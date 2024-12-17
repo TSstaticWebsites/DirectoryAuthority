@@ -8,7 +8,10 @@ from stem.control import Controller
 import base64
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -32,14 +35,24 @@ async def get_consensus_nodes() -> List[Dict]:
 
         logger.info("Authenticating with Tor controller using cookie file")
         cookie_path = "/var/run/tor/control.authcookie"
-        with open(cookie_path, 'rb') as f:
-            cookie = f.read()
+        try:
+            with open(cookie_path, 'rb') as f:
+                cookie = f.read()
+                logger.debug(f"Read auth cookie of length: {len(cookie)}")
+        except Exception as e:
+            logger.error(f"Failed to read auth cookie: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to read auth cookie")
+
         auth_task = asyncio.create_task(asyncio.to_thread(lambda: controller.authenticate(cookie)))
         try:
             await asyncio.wait_for(auth_task, timeout=10.0)
             logger.info("Successfully authenticated with Tor controller")
         except asyncio.TimeoutError:
+            logger.error("Tor controller authentication timeout")
             raise HTTPException(status_code=500, detail="Tor controller authentication timeout")
+        except Exception as e:
+            logger.error(f"Authentication failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
         logger.info("Fetching consensus data")
         consensus_task = asyncio.create_task(
@@ -49,38 +62,58 @@ async def get_consensus_nodes() -> List[Dict]:
             consensus = await asyncio.wait_for(consensus_task, timeout=30.0)
             logger.info(f"Successfully fetched {len(consensus)} nodes from consensus")
         except asyncio.TimeoutError:
+            logger.error("Consensus fetch timeout")
             raise HTTPException(status_code=500, detail="Consensus fetch timeout")
+        except Exception as e:
+            logger.error(f"Failed to fetch consensus: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch consensus: {str(e)}")
 
         nodes = []
         for router in consensus:
             try:
                 # Only include nodes that can be used as Guard or Exit nodes
                 if 'Guard' in router.flags or 'Exit' in router.flags:
-                    # Fetch microdescriptor instead of router descriptor
+                    logger.debug(f"Processing node {router.fingerprint} with flags: {router.flags}")
+                    # Use the correct GETINFO command format for microdescriptors
+                    micro_desc_cmd = f"GETINFO md/desc/id/{router.fingerprint}"
                     micro_desc_task = asyncio.create_task(
                         asyncio.to_thread(
-                            lambda: controller.get_microdescriptor(router.fingerprint)
+                            lambda r=router, cmd=micro_desc_cmd: controller._msg(cmd)
                         )
                     )
                     try:
-                        micro_desc = await asyncio.wait_for(micro_desc_task, timeout=5.0)
-                        if micro_desc and micro_desc.onion_key:
-                            # Convert onion key to base64 for transmission
-                            onion_key_base64 = base64.b64encode(
-                                micro_desc.onion_key.encode()
-                            ).decode()
+                        response = await asyncio.wait_for(micro_desc_task, timeout=5.0)
+                        if response and response.raw_content():
+                            # Extract the onion key from the microdescriptor
+                            micro_desc_lines = response.raw_content().decode().split('\n')
+                            onion_key = None
+                            for line in micro_desc_lines:
+                                if line.startswith('onion-key'):
+                                    onion_key = '\n'.join(micro_desc_lines[
+                                        micro_desc_lines.index(line):
+                                        micro_desc_lines.index(line) + 4
+                                    ])
+                                    break
 
-                            node_info = {
-                                "nickname": router.nickname,
-                                "fingerprint": router.fingerprint,
-                                "address": router.address,
-                                "or_port": router.or_port,
-                                "dir_port": router.dir_port,
-                                "flags": list(router.flags),
-                                "onion_key": onion_key_base64,
-                                "bandwidth": router.bandwidth
-                            }
-                            nodes.append(node_info)
+                            if onion_key:
+                                # Convert onion key to base64 for transmission
+                                onion_key_base64 = base64.b64encode(
+                                    onion_key.encode()
+                                ).decode()
+
+                                node_info = {
+                                    "nickname": router.nickname,
+                                    "fingerprint": router.fingerprint,
+                                    "address": router.address,
+                                    "or_port": router.or_port,
+                                    "dir_port": router.dir_port,
+                                    "flags": list(router.flags),
+                                    "onion_key": onion_key_base64,
+                                    "bandwidth": router.bandwidth
+                                }
+                                nodes.append(node_info)
+                                logger.debug(f"Successfully added node {router.fingerprint}")
+
                     except asyncio.TimeoutError:
                         logger.warning(
                             f"Timeout fetching microdescriptor for {router.fingerprint}"
