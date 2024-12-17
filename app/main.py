@@ -33,8 +33,8 @@ def get_consensus_nodes() -> List[Dict]:
             controller.authenticate()
             logger.debug("Successfully authenticated with Tor controller")
 
-            # Get consensus data
-            consensus = controller.get_network_statuses()
+            # Get consensus data and convert generator to list
+            consensus = list(controller.get_network_statuses())
             logger.debug(f"Retrieved {len(consensus)} nodes from consensus")
 
             for router in consensus:
