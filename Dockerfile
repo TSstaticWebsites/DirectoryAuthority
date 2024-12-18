@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libssl-dev \
     gcc \
+    && pip install --no-cache-dir cryptography==44.0.0 \
     && curl -sSL https://install.python-poetry.org | python3 - \
     && poetry --version
 
@@ -24,12 +25,16 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy project files
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies
+RUN poetry install --no-root
+
+# Copy the rest of the application
 COPY . .
 
-# Install dependencies and verify installations
-RUN poetry install \
-    && pip install --no-cache-dir cryptography==44.0.0 \
-    && python -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}')" \
+# Verify installations
+RUN python -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}')" \
     && python -V \
     && apt-get remove -y gcc python3-dev \
     && apt-get autoremove -y \
