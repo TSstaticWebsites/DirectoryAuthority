@@ -1,4 +1,12 @@
-FROM python:3.11.7-slim
+FROM python:3.11.7-slim@sha256:edaf703dce209d774af3ff768fc92b1e3b60261e7602126276f9ceb0e3a96874
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    POETRY_VERSION=1.7.1 \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1 \
+    PYTHON_VERSION=3.11.7
 
 WORKDIR /app
 
@@ -12,14 +20,11 @@ RUN apt-get update && \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install poetry
-RUN pip install --no-cache-dir poetry==1.7.1
+# Verify Python version
+RUN python --version | grep "3.11.7" || exit 1
 
-# Configure poetry to not create virtualenv since we're in a container
-ENV POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_VERSION=1.7.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1
+# Install poetry
+RUN pip install --no-cache-dir "poetry==$POETRY_VERSION"
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
