@@ -12,9 +12,14 @@ RUN apt-get update && \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install poetry and configure it
-RUN pip install --no-cache-dir poetry==1.7.1 && \
-    poetry config virtualenvs.create false
+# Install poetry
+RUN pip install --no-cache-dir poetry==1.7.1
+
+# Configure poetry to not create virtualenv since we're in a container
+ENV POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_VERSION=1.7.1 \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_NO_INTERACTION=1
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
