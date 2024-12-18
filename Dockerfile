@@ -14,25 +14,16 @@ RUN apt-get update && \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cryptography package at system level first
-RUN pip install --no-cache-dir cryptography==44.0.0
-
-# Create and activate virtual environment
-ENV VIRTUAL_ENV=/app/.venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Copy requirements file
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies in virtual environment
+# Install dependencies directly without virtual environment
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
 # Set environment variables
-ENV PYTHONPATH=/app
 ENV PORT=8080
 
 # Command to run the application
