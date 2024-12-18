@@ -21,10 +21,12 @@ async def get_consensus_nodes():
     try:
         downloader = DescriptorDownloader()
         consensus_iterator = await asyncio.to_thread(lambda: downloader.get_consensus().run())
-        consensus = await asyncio.to_thread(lambda: next(iter(consensus_iterator)))
         nodes = []
 
-        for router in consensus.routers:
+        # Collect all routers from the consensus
+        routers = await asyncio.to_thread(lambda: list(consensus_iterator))
+
+        for router in routers:
             # Only include nodes with Guard or Exit flags
             if 'Guard' in router.flags or 'Exit' in router.flags:
                 role = NodeRole.ENTRY if 'Guard' in router.flags else \
@@ -32,13 +34,17 @@ async def get_consensus_nodes():
                        NodeRole.MIDDLE
 
                 # Use the router's key material directly
-                node = Node(
-                    id=router.fingerprint,
-                    public_key=base64.b64encode(router.onion_key).decode(),
-                    role=role,
-                    address=f"{router.address}:{router.or_port}"
-                )
-                nodes.append(node)
+                try:
+                    node = Node(
+                        id=router.fingerprint,
+                        public_key=base64.b64encode(router.onion_key).decode(),
+                        role=role,
+                        address=f"{router.address}:{router.or_port}"
+                    )
+                    nodes.append(node)
+                except AttributeError:
+                    # Skip nodes that don't have all required attributes
+                    continue
 
         return nodes
     except Exception as e:
