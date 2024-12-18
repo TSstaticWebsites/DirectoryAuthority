@@ -2,14 +2,9 @@ FROM python:3.12-slim-bullseye
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=1.7.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    PATH="/opt/poetry/bin:$PATH"
+    PYTHONUNBUFFERED=1
 
-# Install system dependencies and Poetry
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -19,20 +14,21 @@ RUN apt-get update && apt-get install -y \
     gcc \
     pkg-config \
     git \
-    && pip install --no-cache-dir cryptography==41.0.7 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy project files
-COPY pyproject.toml poetry.lock ./
+# Copy requirements first for better caching
+COPY pyproject.toml ./
 
-# Install Poetry and dependencies
-RUN curl -sSL https://install.python-poetry.org | python3 - \
-    && poetry --version \
-    && poetry config virtualenvs.create false \
-    && poetry install --no-root
+# Extract dependencies from pyproject.toml and install them
+RUN pip install --no-cache-dir cryptography==41.0.7 \
+    fastapi==0.104.1 \
+    uvicorn==0.24.0 \
+    python-multipart==0.0.6 \
+    stem==1.8.2 \
+    psycopg==3.1.12
 
 # Copy the rest of the application
 COPY . .
