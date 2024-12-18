@@ -31,23 +31,26 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies
-RUN poetry install --no-root && \
-    poetry run pip install --no-cache-dir cryptography==44.0.0
+RUN poetry install --no-root
 
 # Copy project files
 COPY . .
 
 # Install project
-RUN poetry install && \
-    poetry run python -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}')"
+RUN poetry install
 
 # Start new stage for smaller final image
 FROM python:3.11.7-slim
 
-# Install runtime dependencies
+# Install runtime dependencies and cryptography
 RUN apt-get update && apt-get install -y \
     libffi-dev \
     libssl-dev \
+    python3-dev \
+    gcc \
+    && pip install --no-cache-dir cryptography==44.0.0 \
+    && apt-get remove -y gcc python3-dev \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -59,7 +62,7 @@ COPY --from=builder /app .
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Verify cryptography installation
-RUN /app/.venv/bin/python -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}')"
+RUN python -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}')"
 
 # Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
