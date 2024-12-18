@@ -20,9 +20,8 @@ async def get_consensus_nodes():
     """Fetch nodes from Tor network consensus."""
     try:
         downloader = DescriptorDownloader()
-        consensus = await asyncio.to_thread(
-            lambda: next(downloader.get_consensus().run())
-        )
+        consensus_iterator = await asyncio.to_thread(lambda: downloader.get_consensus().run())
+        consensus = await asyncio.to_thread(lambda: next(iter(consensus_iterator)))
         nodes = []
 
         for router in consensus.routers:
