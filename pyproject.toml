@@ -6,12 +6,12 @@ authors = ["Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.c
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.11.7,<3.13"
+python = ">=3.12,<3.13"
 fastapi = {extras = ["standard"], version = "0.115.6"}
 uvicorn = "0.34.0"
 httpx = "0.28.1"
 stem = "1.8.2"
-cryptography = "44.0.0"
+cryptography = "41.0.7"
 
 [build-system]
 requires = ["poetry-core"]
