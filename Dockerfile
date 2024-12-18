@@ -41,6 +41,11 @@ RUN poetry install
 # Start new stage for smaller final image
 FROM python:3.11.7-slim
 
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy virtual environment from builder
