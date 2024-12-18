@@ -8,6 +8,10 @@ RUN apt-get update && \
     build-essential \
     libffi-dev \
     python3-venv \
+    rustc \
+    cargo \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create and activate virtual environment
