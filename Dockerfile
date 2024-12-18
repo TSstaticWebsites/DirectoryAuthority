@@ -14,6 +14,9 @@ RUN apt-get update && \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install cryptography package at system level first
+RUN pip install --no-cache-dir cryptography==44.0.0
+
 # Create and activate virtual environment
 ENV VIRTUAL_ENV=/app/.venv
 RUN python -m venv $VIRTUAL_ENV
@@ -33,4 +36,4 @@ ENV PYTHONPATH=/app
 ENV PORT=8080
 
 # Command to run the application
-CMD ["/app/.venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
