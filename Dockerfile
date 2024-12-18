@@ -1,4 +1,4 @@
-FROM python:3.11.7-slim
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libssl-dev \
     gcc \
-    && pip install --no-cache-dir cryptography==44.0.0 \
+    && pip install --no-cache-dir cryptography==41.0.7 \
     && curl -sSL https://install.python-poetry.org | python3 - \
     && poetry --version
 
