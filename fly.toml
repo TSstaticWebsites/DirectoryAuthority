@@ -1,5 +1,5 @@
-app = "app-lckazqne"
-primary_region = "iad"
+app = "app-aknviloa"
+primary_region = "fra"
 
 [build]
   dockerfile = "Dockerfile"
@@ -7,6 +7,10 @@ primary_region = "iad"
 [env]
   PORT = "8080"
   PYTHONPATH = "/app"
+  POETRY_VIRTUALENVS_CREATE = "false"
+  POETRY_VERSION = "1.7.1"
+  POETRY_HOME = "/opt/poetry"
+  POETRY_NO_INTERACTION = "1"
 
 [http_service]
   internal_port = 8080
