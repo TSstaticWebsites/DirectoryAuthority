@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "directory-authority-proxy"
+version = "0.1.0"
+description = "Directory Authority Proxy for Onion Routing System"
+authors = ["Devin <devin@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.109.2"
+uvicorn = {extras = ["standard"], version = "^0.27.1"}
+pydantic = "^2.6.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
